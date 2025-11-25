@@ -1,10 +1,27 @@
-// Estado global simples
 window.GAME_STATE = {
   paused: false,
+  playing: false,
 };
 
 const randRange = (min, max) => Math.random() * (max - min) + min;
 const THREE_REF = AFRAME.THREE;
+
+const formatTime = (ms) => {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const minutes = String(Math.floor(total / 60)).padStart(2, "0");
+  const seconds = String(total % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+};
+
+function toggleGameplayUI(show) {
+  const hud = document.getElementById("hud");
+  const reticle = document.getElementById("reticle");
+  const helper = document.getElementById("helper");
+
+  if (hud) hud.classList.toggle("hidden", !show);
+  if (reticle) reticle.classList.toggle("hidden", !show);
+  if (helper) helper.classList.toggle("hidden", !show);
+}
 
 function setGamePaused(paused) {
   const scene = document.getElementById("scene");
@@ -16,53 +33,129 @@ function setGamePaused(paused) {
 
   if (paused) {
     scene.pause();
-    pauseOverlay.style.display = "flex";
+    if (window.GAME_STATE.playing) pauseOverlay.style.display = "flex";
     if (helper) helper.style.display = "none";
     if (reticle) reticle.style.display = "none";
   } else {
     scene.play();
     pauseOverlay.style.display = "none";
-    if (helper) helper.style.display = "block";
-    if (reticle) reticle.style.display = "block";
+    if (window.GAME_STATE.playing) {
+      if (helper) helper.style.display = "block";
+      if (reticle) reticle.style.display = "block";
+    }
   }
 }
 
 AFRAME.registerComponent("game-environment", {
   schema: {
-    spawnInterval: { default: 1500 },
-    maxTargets: { default: 8 },
+    spawnInterval: { default: 1200 },
+    maxTargets: { default: 15 },
   },
 
   init: function () {
     this.lastSpawnTime = 0;
     this.score = 0;
     this.scoreEl = document.getElementById("score");
+    this.timerEl = document.getElementById("timer");
+    this.timerWrap = document.getElementById("timerWrap");
     this.cameraEl = document.getElementById("camera");
     this.targets = [];
 
-    for (let i = 0; i < 4; i++) this.spawnTarget();
+    this.targetQuota = 1;
+    this.playing = false;
+    this.endTime = null;
+    this.currentConfig = null;
   },
 
-  tick: function (time) {
-    if (window.GAME_STATE.paused) return;
+  tick: function () {
+    if (!this.playing || window.GAME_STATE.paused) return;
 
-    if (time - this.lastSpawnTime > this.data.spawnInterval) {
-      if (this.targets.length < this.data.maxTargets) {
-        this.spawnTarget();
-      }
-      this.lastSpawnTime = time;
+    const remaining = this.endTime - Date.now();
+    if (remaining <= 0) {
+      this.updateTimer(0);
+      this.finishGame();
+      return;
     }
+    this.updateTimer(remaining);
+
+    this.maintainTargets();
+  },
+
+  startGame: function (options) {
+    this.clearTargets();
+    this.targetQuota = Math.min(Math.max(options.targetCount, 1), 15);
+    this.currentConfig = { targetCount: this.targetQuota };
+
+    this.score = 0;
+    this.updateScoreDisplay();
+
+    this.endTime = Date.now() + 60000;
+    this.updateTimer(60000);
+    if (this.timerWrap) {
+      this.timerWrap.style.display = "inline-block";
+    }
+
+    this.playing = true;
+    window.GAME_STATE.playing = true;
+    window.GAME_STATE.paused = false;
+
+    this.maintainTargets(true);
+  },
+
+  finishGame: function () {
+    if (!this.playing) return;
+
+    this.playing = false;
+    window.GAME_STATE.playing = false;
+    window.GAME_STATE.paused = false;
+    this.clearTargets();
+
+    if (document.pointerLockElement) document.exitPointerLock();
+    this.el.emit("game-over", { score: this.score });
+  },
+
+  updateScoreDisplay: function () {
+    if (this.scoreEl) this.scoreEl.textContent = this.score;
+  },
+
+  updateTimer: function (ms) {
+    if (!this.timerEl) return;
+    this.timerEl.textContent = formatTime(ms);
   },
 
   addScore: function (points) {
     this.score += points;
-    this.scoreEl.textContent = this.score;
+    this.updateScoreDisplay();
   },
 
   removeTarget: function (targetEl) {
     const idx = this.targets.indexOf(targetEl);
     if (idx !== -1) this.targets.splice(idx, 1);
     if (targetEl && targetEl.parentNode) targetEl.remove();
+  },
+
+  clearTargets: function () {
+    while (this.targets.length) {
+      const t = this.targets.pop();
+      if (t && t.parentNode) t.remove();
+    }
+  },
+
+  maintainTargets: function (force) {
+    if (!this.cameraEl) return;
+    const desired = Math.min(Math.max(this.targetQuota, 1), this.data.maxTargets);
+    if (!force && this.targets.length >= desired) return;
+    while (this.targets.length < desired) {
+      this.spawnTarget();
+    }
+  },
+
+  handleTargetHit: function (targetEl) {
+    this.addScore(1);
+    this.removeTarget(targetEl);
+
+    if (!this.playing) return;
+    this.maintainTargets();
   },
 
   spawnTarget: function () {
@@ -80,7 +173,7 @@ AFRAME.registerComponent("game-environment", {
 
     const pos = new THREE_REF.Vector3(
       randRange(-3, 3),
-      randRange(-0.5, 1.5),
+      randRange(0.1, 1.0),
       -randRange(8, 16)
     );
     camObj.localToWorld(pos);
@@ -110,7 +203,7 @@ AFRAME.registerComponent("gun", {
 
     const dir = new THREE_REF.Vector3();
     camObj.getWorldDirection(dir);
-    dir.multiplyScalar(-1); // Ajusta direção para frente da câmera
+    dir.multiplyScalar(-1);
     dir.normalize();
 
     const start = new THREE_REF.Vector3();
@@ -170,8 +263,7 @@ AFRAME.registerComponent("projectile", {
 
       const dist = this.el.object3D.position.distanceTo(t.object3D.position);
       if (dist < 0.5) {
-        this.game.addScore(1);
-        this.game.removeTarget(t);
+        this.game.handleTargetHit(t);
         this.destroy();
         return;
       }
@@ -190,13 +282,54 @@ window.addEventListener("load", () => {
   const pauseOverlay = document.getElementById("pauseOverlay");
   const btnResume = document.getElementById("btnResume");
   const btnRestart = document.getElementById("btnRestart");
+  const btnPauseMenu = document.getElementById("btnPauseMenu");
+  const startMenu = document.getElementById("startMenu");
+  const endOverlay = document.getElementById("endOverlay");
+  const finalScore = document.getElementById("finalScore");
+  const btnBackToMenu = document.getElementById("btnBackToMenu");
+  const btnStartGame = document.getElementById("btnStartGame");
+  const ballCountInput = document.getElementById("ballCount");
+
+  let game;
+
+  const showMenu = () => {
+    startMenu.style.display = "flex";
+    endOverlay.style.display = "none";
+    toggleGameplayUI(false);
+    if (document.pointerLockElement) document.exitPointerLock();
+  };
+
+  const startMatch = () => {
+    if (!game) return;
+    const value = parseInt(ballCountInput.value, 10);
+    if (Number.isNaN(value) || value < 1 || value > 15) {
+      ballCountInput.value = Math.min(Math.max(value || 1, 1), 15);
+      return;
+    }
+
+    game.startGame({ targetCount: value });
+
+    startMenu.style.display = "none";
+    endOverlay.style.display = "none";
+    toggleGameplayUI(true);
+    setGamePaused(false);
+
+    const canvas = scene.canvas;
+    if (canvas) canvas.requestPointerLock();
+  };
+
+  scene.addEventListener("game-over", (evt) => {
+    toggleGameplayUI(false);
+    endOverlay.style.display = "flex";
+    finalScore.textContent = evt.detail.score ?? 0;
+  });
 
   scene.addEventListener("loaded", () => {
     const canvas = scene.canvas;
-    if (!canvas) return;
+    game = scene.components["game-environment"];
 
     canvas.addEventListener("click", () => {
-      if (window.GAME_STATE.paused) return;
+      if (window.GAME_STATE.paused || !window.GAME_STATE.playing) return;
       if (document.pointerLockElement !== canvas) {
         canvas.requestPointerLock();
       }
@@ -204,9 +337,9 @@ window.addEventListener("load", () => {
 
     document.addEventListener("pointerlockchange", () => {
       const locked = document.pointerLockElement === canvas;
-      if (!locked) {
+      if (!locked && window.GAME_STATE.playing) {
         setGamePaused(true);
-      } else {
+      } else if (locked) {
         setGamePaused(false);
       }
     });
@@ -218,9 +351,25 @@ window.addEventListener("load", () => {
     canvas.requestPointerLock();
   });
 
-  btnRestart.addEventListener("click", () => {
-    location.reload();
+  btnPauseMenu.addEventListener("click", () => {
+    if (game) game.finishGame();
+    pauseOverlay.style.display = "none";
+    showMenu();
   });
 
-  setGamePaused(false);
+  btnRestart.addEventListener("click", () => {
+    if (!game || !game.currentConfig) return;
+    ballCountInput.value = game.currentConfig.targetCount;
+    startMatch();
+  });
+
+  btnBackToMenu.addEventListener("click", () => {
+    if (game) game.finishGame();
+    showMenu();
+  });
+
+  btnStartGame.addEventListener("click", startMatch);
+
+  toggleGameplayUI(false);
+  pauseOverlay.style.display = "none";
 });

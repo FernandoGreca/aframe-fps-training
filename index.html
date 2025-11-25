@@ -2,7 +2,7 @@
 <html lang="pt-br">
   <head>
     <meta charset="utf-8" />
-    <title>Mini Game A-Frame - Tiro em Alvos (FPS + Pause)</title>
+    <title>Mini Game A-Frame - Tiro em Alvos</title>
 
     <!-- A-FRAME -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
@@ -12,26 +12,99 @@
   </head>
 
   <body class="select-none m-0 overflow-hidden bg-black font-sans">
+    <!-- START MENU -->
+    <div
+      id="startMenu"
+      class="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white z-50"
+    >
+      <div
+        class="bg-black/60 p-8 rounded-2xl border border-white/10 w-[480px] max-w-[90vw] shadow-2xl backdrop-blur"
+      >
+        <div class="mb-5">
+          <p class="text-xs uppercase tracking-[0.2em] text-blue-300">
+            Web AimLab
+          </p>
+          <h1 class="text-2xl font-semibold text-white">Multiplos alvos</h1>
+          <p class="text-sm text-neutral-300 mt-1">
+            Escolha quantas bolas (1 a 15) ficarao simultaneamente na arena e
+            jogue por 1 minuto.
+          </p>
+        </div>
+
+        <div class="mb-5">
+          <label
+            for="ballCount"
+            class="text-sm text-neutral-200 flex justify-between items-center"
+          >
+            Numero de bolas simultaneas
+            <span class="text-neutral-400 text-xs">(entre 1 e 15)</span>
+          </label>
+          <input
+            id="ballCount"
+            type="number"
+            min="1"
+            max="15"
+            value="4"
+            class="mt-2 w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <button
+          id="btnStartGame"
+          class="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition"
+        >
+          Iniciar partida
+        </button>
+      </div>
+    </div>
+
+    <!-- END OVERLAY -->
+    <div
+      id="endOverlay"
+      class="fixed inset-0 hidden items-center justify-center bg-black/80 z-50 backdrop-blur-sm"
+    >
+      <div
+        class="bg-neutral-900/95 px-8 py-6 rounded-2xl border border-white/10 text-center shadow-xl w-[420px] max-w-[90vw]"
+      >
+        <h2 class="text-xl font-semibold text-white mb-2">Tempo esgotado</h2>
+        <p class="text-neutral-300 text-sm mb-4">
+          Confira sua pontuacao e volte ao menu para jogar novamente.
+        </p>
+        <div class="text-3xl font-bold text-blue-300 mb-5">
+          Pontuacao: <span id="finalScore">0</span>
+        </div>
+        <button
+          id="btnBackToMenu"
+          class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition w-full"
+        >
+          Voltar ao menu
+        </button>
+      </div>
+    </div>
+
     <!-- HUD -->
     <div
       id="hud"
-      class="fixed top-3 left-3 z-20 bg-black/60 text-white text-lg px-4 py-2 rounded-lg backdrop-blur border border-white/10 pointer-events-none"
+      class="hidden fixed top-3 left-3 z-20 bg-black/60 text-white text-lg px-4 py-2 rounded-lg backdrop-blur border border-white/10 pointer-events-none"
     >
-      Pontuação: <span id="score">0</span>
+      Pontuacao: <span id="score">0</span>
+      <span class="ml-4 text-sm text-neutral-200" id="timerWrap" style="display: none">
+        Tempo: <span id="timer">01:00</span>
+      </span>
     </div>
 
     <!-- Reticle -->
     <div
       id="reticle"
-      class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 z-20 border-2 border-white/80 rounded-full shadow-[0_0_6px_rgba(255,255,255,0.7)] pointer-events-none"
+      class="hidden fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 z-20 border-2 border-white/80 rounded-full shadow-[0_0_6px_rgba(255,255,255,0.7)] pointer-events-none"
     ></div>
 
     <!-- Helper -->
     <div
       id="helper"
-      class="fixed bottom-3 left-1/2 -translate-x-1/2 z-20 bg-black/60 text-white/90 text-sm px-3 py-1.5 rounded-md pointer-events-none backdrop-blur"
+      class="hidden fixed bottom-3 left-1/2 -translate-x-1/2 z-20 bg-black/60 text-white/90 text-sm px-3 py-1.5 rounded-md pointer-events-none backdrop-blur"
     >
-      Clique para capturar o mouse | WASD movimenta | Mouse olha | Botão
+      Clique para capturar o mouse | WASD movimenta | Mouse olha | Botao
       esquerdo atira | ESC pausa
     </div>
 
@@ -63,6 +136,13 @@
             class="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 text-neutral-200 font-medium rounded-lg transition"
           >
             Reiniciar
+          </button>
+
+          <button
+            id="btnPauseMenu"
+            class="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-100 font-medium rounded-lg transition"
+          >
+            Menu
           </button>
         </div>
       </div>

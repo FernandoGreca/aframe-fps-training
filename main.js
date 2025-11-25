@@ -28,6 +28,7 @@ function setGamePaused(paused) {
   const pauseOverlay = document.getElementById("pauseOverlay");
   const helper = document.getElementById("helper");
   const reticle = document.getElementById("reticle");
+  const game = scene?.components?.["game-environment"];
 
   window.GAME_STATE.paused = paused;
 
@@ -36,6 +37,7 @@ function setGamePaused(paused) {
     if (window.GAME_STATE.playing) pauseOverlay.style.display = "flex";
     if (helper) helper.style.display = "none";
     if (reticle) reticle.style.display = "none";
+    if (game && game.handlePauseStart) game.handlePauseStart();
   } else {
     scene.play();
     pauseOverlay.style.display = "none";
@@ -43,6 +45,7 @@ function setGamePaused(paused) {
       if (helper) helper.style.display = "block";
       if (reticle) reticle.style.display = "block";
     }
+    if (game && game.handlePauseEnd) game.handlePauseEnd();
   }
 }
 
@@ -65,6 +68,7 @@ AFRAME.registerComponent("game-environment", {
     this.playing = false;
     this.endTime = null;
     this.currentConfig = null;
+    this.pauseStartedAt = null;
   },
 
   tick: function () {
@@ -109,9 +113,22 @@ AFRAME.registerComponent("game-environment", {
     window.GAME_STATE.playing = false;
     window.GAME_STATE.paused = false;
     this.clearTargets();
+    this.pauseStartedAt = null;
 
     if (document.pointerLockElement) document.exitPointerLock();
     this.el.emit("game-over", { score: this.score });
+  },
+
+  handlePauseStart: function () {
+    if (!this.playing || this.pauseStartedAt) return;
+    this.pauseStartedAt = Date.now();
+  },
+
+  handlePauseEnd: function () {
+    if (!this.playing || !this.pauseStartedAt) return;
+    const pausedFor = Date.now() - this.pauseStartedAt;
+    this.endTime += pausedFor;
+    this.pauseStartedAt = null;
   },
 
   updateScoreDisplay: function () {
